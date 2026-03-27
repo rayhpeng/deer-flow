@@ -2,9 +2,6 @@
 
 import json
 
-import pytest
-
-
 def _format_sse(event: str, data, *, event_id: str | None = None) -> str:
     from app.gateway.routers.thread_runs import _format_sse
     return _format_sse(event, data, event_id=event_id)
