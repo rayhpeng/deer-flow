@@ -11,15 +11,13 @@ Note: ``events`` mode is not supported through the gateway — it requires
 ``graph.astream_events()`` which cannot simultaneously produce ``values``
 snapshots.  The JS open-source LangGraph API server works around this via
 internal checkpoint callbacks that are not exposed in the Python public API.
-Clients that need ``events`` should connect directly to ``langgraph dev``
-(via the nginx proxy at port 2024).
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any
+from typing import Any, Literal
 
 from deerflow.agents.runs.manager import RunManager, RunRecord
 from deerflow.agents.runs.schemas import RunStatus
@@ -56,8 +54,8 @@ async def run_agent(
     config: dict,
     stream_modes: list[str] | None = None,
     stream_subgraphs: bool = False,
-    interrupt_before: list[str] | None = None,
-    interrupt_after: list[str] | None = None,
+    interrupt_before: list[str] | Literal["*"] | None = None,
+    interrupt_after: list[str] | Literal["*"] | None = None,
 ) -> None:
     """Execute an agent in the background, publishing events to *bridge*."""
 

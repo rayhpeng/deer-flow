@@ -147,7 +147,15 @@ class RunManager:
         run_id = str(uuid.uuid4())
         now = _now_iso()
 
+        _supported_strategies = ("reject", "interrupt", "rollback")
+
         async with self._lock:
+            if multitask_strategy not in _supported_strategies:
+                raise UnsupportedStrategyError(
+                    f"Multitask strategy '{multitask_strategy}' is not yet supported. "
+                    f"Supported strategies: {', '.join(_supported_strategies)}"
+                )
+
             inflight = [r for r in self._runs.values() if r.thread_id == thread_id and r.status in (RunStatus.pending, RunStatus.running)]
 
             if multitask_strategy == "reject" and inflight:
@@ -201,3 +209,7 @@ class RunManager:
 
 class ConflictError(Exception):
     """Raised when multitask_strategy=reject and thread has inflight runs."""
+
+
+class UnsupportedStrategyError(Exception):
+    """Raised when a multitask_strategy value is not yet implemented."""

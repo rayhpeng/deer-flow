@@ -1,6 +1,6 @@
 """Run lifecycle management for LangGraph Platform API compatibility."""
 
-from .manager import ConflictError, RunManager, RunRecord
+from .manager import ConflictError, RunManager, RunRecord, UnsupportedStrategyError
 from .schemas import DisconnectMode, RunStatus
 from .worker import run_agent
 
@@ -10,5 +10,6 @@ __all__ = [
     "RunManager",
     "RunRecord",
     "RunStatus",
+    "UnsupportedStrategyError",
     "run_agent",
 ]

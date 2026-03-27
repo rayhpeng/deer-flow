@@ -13,6 +13,7 @@ from app.gateway.routers import (
     mcp,
     memory,
     models,
+    runs,
     skills,
     suggestions,
     thread_runs,
@@ -221,6 +222,9 @@ This gateway provides custom endpoints for models, MCP configuration, skills, an
 
     # Thread Runs API (LangGraph Platform-compatible runs lifecycle)
     app.include_router(thread_runs.router)
+
+    # Stateless Runs API (stream/wait without a pre-existing thread)
+    app.include_router(runs.router)
 
     @app.get("/health", tags=["health"])
     async def health_check() -> dict:

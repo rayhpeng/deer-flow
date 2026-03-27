@@ -22,8 +22,10 @@ from fastapi.responses import Response, StreamingResponse
 from langchain_core.messages import HumanMessage
 from pydantic import BaseModel, Field
 
-from deerflow.agents.runs import ConflictError, DisconnectMode, RunManager, RunRecord, RunStatus, run_agent
+from deerflow.agents.runs import ConflictError, DisconnectMode, RunManager, RunRecord, RunStatus, UnsupportedStrategyError, run_agent
 from deerflow.agents.stream_bridge import END_SENTINEL, HEARTBEAT_SENTINEL, StreamBridge
+
+from app.gateway.routers.threads import _serialize_channel_values
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/threads", tags=["runs"])
@@ -211,6 +213,8 @@ async def _start_run(
         )
     except ConflictError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except UnsupportedStrategyError as exc:
+        raise HTTPException(status_code=501, detail=str(exc)) from exc
 
     agent_factory = _resolve_agent_factory(body.assistant_id)
     graph_input = _normalize_input(body.input)
@@ -249,7 +253,6 @@ async def _sse_consumer(
     - ``cancel``: abort the background task on client disconnect.
     - ``continue``: let the task run; events are discarded.
     """
-    event_counter = 0
     try:
         async for entry in bridge.subscribe(record.run_id):
             if await request.is_disconnected():
@@ -261,12 +264,10 @@ async def _sse_consumer(
 
             if entry is END_SENTINEL:
                 # LangGraph Platform end event: data is empty (null)
-                event_counter += 1
-                yield _format_sse("end", None, event_id=str(event_counter))
+                yield _format_sse("end", None, event_id=entry.id or None)
                 return
 
-            event_counter += 1
-            yield _format_sse(entry.event, entry.data, event_id=str(event_counter))
+            yield _format_sse(entry.event, entry.data, event_id=entry.id or None)
 
     finally:
         if record.status in (RunStatus.pending, RunStatus.running):
@@ -330,8 +331,7 @@ async def wait_run(thread_id: str, body: RunCreateRequest, request: Request) -> 
         if checkpoint_tuple is not None:
             checkpoint = getattr(checkpoint_tuple, "checkpoint", {}) or {}
             channel_values = checkpoint.get("channel_values", {})
-            # Filter internal keys (same as worker values serialization)
-            return {k: v for k, v in channel_values.items() if not k.startswith("__pregel_") and k != "__interrupt__"}
+            return _serialize_channel_values(channel_values)
     except Exception:
         logger.exception("Failed to fetch final state for run %s", record.run_id)
 

@@ -21,6 +21,7 @@ from app.gateway.routers.thread_runs import (
     _sse_consumer,
     _start_run,
 )
+from app.gateway.routers.threads import _serialize_channel_values
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/runs", tags=["runs"])
@@ -63,7 +64,8 @@ async def stateless_wait(body: RunCreateRequest, request: Request) -> dict:
         checkpoint_tuple = await checkpointer.aget_tuple(config)
         if checkpoint_tuple is not None:
             checkpoint = getattr(checkpoint_tuple, "checkpoint", {}) or {}
-            return checkpoint.get("channel_values", {})
+            channel_values = checkpoint.get("channel_values", {})
+            return _serialize_channel_values(channel_values)
     except Exception:
         logger.exception("Failed to fetch final state for run %s", record.run_id)
 
