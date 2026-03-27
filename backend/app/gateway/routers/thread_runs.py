@@ -247,26 +247,38 @@ async def _sse_consumer(
 
     The ``finally`` block implements ``on_disconnect`` semantics:
     - ``cancel``: abort the background task on client disconnect.
-    - ``continue``: let the task run; events are discarded.
+    - ``continue``: let the task run; events are discarded but the
+      bridge queue continues to be drained to avoid backpressure.
     """
     event_counter = 0
+    disconnected = False
     try:
         async for entry in bridge.subscribe(record.run_id):
-            if await request.is_disconnected():
-                break
+            # On first detection of client disconnect, decide behavior based
+            # on the run's configured on_disconnect mode.
+            if not disconnected and await request.is_disconnected():
+                disconnected = True
+                if record.on_disconnect == DisconnectMode.cancel:
+                    # Stop consuming events; the run will be cancelled in finally.
+                    break
+                # For DisconnectMode.continue_, keep consuming from the bridge
+                # to drain the queue, but do not yield further events.
 
             if entry is HEARTBEAT_SENTINEL:
-                yield ": heartbeat\n\n"
+                if not disconnected:
+                    yield ": heartbeat\n\n"
                 continue
 
             if entry is END_SENTINEL:
                 # LangGraph Platform end event: data is empty (null)
                 event_counter += 1
-                yield _format_sse("end", None, event_id=str(event_counter))
+                if not disconnected:
+                    yield _format_sse("end", None, event_id=str(event_counter))
                 return
 
             event_counter += 1
-            yield _format_sse(entry.event, entry.data, event_id=str(event_counter))
+            if not disconnected:
+                yield _format_sse(entry.event, entry.data, event_id=str(event_counter))
 
     finally:
         if record.status in (RunStatus.pending, RunStatus.running):
