@@ -19,28 +19,15 @@ import asyncio
 import logging
 from typing import Any, Literal
 
-from deerflow.agents.runs.manager import RunManager, RunRecord
-from deerflow.agents.runs.schemas import RunStatus
-from deerflow.agents.stream_bridge.base import StreamBridge
+from .manager import RunManager, RunRecord
+from .schemas import RunStatus
+from deerflow.runtime.serialization import serialize
+from deerflow.runtime.stream_bridge import StreamBridge
 
 logger = logging.getLogger(__name__)
 
 # Valid stream_mode values for LangGraph's graph.astream()
 _VALID_LG_MODES = {"values", "updates", "checkpoints", "tasks", "debug", "messages", "custom"}
-
-# Internal LangGraph keys that must NOT appear in values events
-_PREGEL_INTERNAL_KEYS = frozenset(
-    k
-    for k in (
-        "__pregel_tasks",
-        "__pregel_resuming",
-        "__pregel_pull",
-        "__pregel_push",
-        "__pregel_dedupe",
-        "__pregel_store",
-    )
-)
-
 
 async def run_agent(
     bridge: StreamBridge,
@@ -153,7 +140,7 @@ async def run_agent(
                     logger.info("Run %s abort requested — stopping", run_id)
                     break
                 sse_event = _lg_mode_to_sse_event(single_mode)
-                await bridge.publish(run_id, sse_event, _serialize(chunk, mode=single_mode))
+                await bridge.publish(run_id, sse_event, serialize(chunk, mode=single_mode))
         else:
             # Multiple modes or subgraphs: astream yields tuples
             async for item in agent.astream(
@@ -171,7 +158,7 @@ async def run_agent(
                     continue
 
                 sse_event = _lg_mode_to_sse_event(mode)
-                await bridge.publish(run_id, sse_event, _serialize(chunk, mode=mode))
+                await bridge.publish(run_id, sse_event, serialize(chunk, mode=mode))
 
         # 8. Final status
         if record.abort_event.is_set():
@@ -264,76 +251,3 @@ def _unpack_stream_item(
     return lg_modes[0] if lg_modes else None, item
 
 
-def _serialize(obj: Any, *, mode: str = "") -> Any:
-    """Serialize LangChain objects to JSON-serialisable dicts.
-
-    Special handling per mode:
-
-    * ``messages`` — obj is ``(message_chunk, metadata_dict)``; returns
-      ``[serialized_chunk, metadata]`` to match LangGraph Platform format.
-    * ``values`` — obj is the full state dict; internal ``__pregel_*``
-      keys are stripped.
-    * everything else — recursive ``model_dump()`` / ``dict()`` fallback.
-    """
-    if mode == "messages":
-        return _serialize_messages_tuple(obj)
-    if mode == "values":
-        return _serialize_values_state(obj)
-    return _serialize_lc_object(obj)
-
-
-def _serialize_messages_tuple(obj: Any) -> Any:
-    """Serialize a messages-mode tuple ``(chunk, metadata)``."""
-    if isinstance(obj, tuple) and len(obj) == 2:
-        chunk, metadata = obj
-        return [_serialize_lc_object(chunk), metadata if isinstance(metadata, dict) else {}]
-    # Fallback
-    return _serialize_lc_object(obj)
-
-
-def _serialize_values_state(state: Any) -> Any:
-    """Serialize a values-mode full state snapshot.
-
-    Strips internal ``__pregel_*`` keys and ``__interrupt__`` that
-    LangGraph injects into the state dict.  These are not part of the
-    public API and will confuse the ``useStream`` React hook.
-    """
-    if not isinstance(state, dict):
-        return _serialize_lc_object(state)
-
-    cleaned: dict[str, Any] = {}
-    for key, value in state.items():
-        # Skip LangGraph internal channels
-        if key.startswith("__pregel_") or key == "__interrupt__":
-            continue
-        cleaned[key] = _serialize_lc_object(value)
-    return cleaned
-
-
-def _serialize_lc_object(obj: Any) -> Any:
-    """Recursively serialize a LangChain object to a JSON-serialisable dict."""
-    if obj is None:
-        return None
-    if isinstance(obj, (str, int, float, bool)):
-        return obj
-    if isinstance(obj, dict):
-        return {k: _serialize_lc_object(v) for k, v in obj.items()}
-    if isinstance(obj, (list, tuple)):
-        return [_serialize_lc_object(item) for item in obj]
-    # Pydantic v2
-    if hasattr(obj, "model_dump"):
-        try:
-            return obj.model_dump()
-        except Exception:
-            pass
-    # Pydantic v1 / older objects
-    if hasattr(obj, "dict"):
-        try:
-            return obj.dict()
-        except Exception:
-            pass
-    # Last resort
-    try:
-        return str(obj)
-    except Exception:
-        return repr(obj)

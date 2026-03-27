@@ -20,6 +20,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from deerflow.config.paths import Paths, get_paths
+from deerflow.runtime import serialize_channel_values
 
 from app.gateway.deps import get_checkpointer
 
@@ -111,56 +112,6 @@ class ThreadHistoryRequest(BaseModel):
 
     limit: int = Field(default=10, ge=1, le=100, description="Maximum entries")
     before: str | None = Field(default=None, description="Cursor for pagination")
-
-
-# ---------------------------------------------------------------------------
-# Serialization helpers
-# ---------------------------------------------------------------------------
-
-
-def _serialize_lc_object(obj: Any) -> Any:
-    """Recursively serialize a LangChain object to JSON-safe form.
-
-    This ensures that ``AIMessage``, ``HumanMessage``, ``ToolMessage``
-    etc. in ``channel_values["messages"]`` are converted to dicts that
-    the ``useStream`` React hook can consume.
-    """
-    if obj is None:
-        return None
-    if isinstance(obj, (str, int, float, bool)):
-        return obj
-    if isinstance(obj, dict):
-        return {k: _serialize_lc_object(v) for k, v in obj.items()}
-    if isinstance(obj, (list, tuple)):
-        return [_serialize_lc_object(item) for item in obj]
-    if hasattr(obj, "model_dump"):
-        try:
-            return obj.model_dump()
-        except Exception:
-            pass
-    if hasattr(obj, "dict"):
-        try:
-            return obj.dict()
-        except Exception:
-            pass
-    try:
-        return str(obj)
-    except Exception:
-        return repr(obj)
-
-
-def _serialize_channel_values(channel_values: dict[str, Any]) -> dict[str, Any]:
-    """Serialize channel values, stripping internal LangGraph keys.
-
-    Internal keys like ``__pregel_*`` and ``__interrupt__`` are removed
-    to match what the LangGraph Platform API returns.
-    """
-    result: dict[str, Any] = {}
-    for key, value in channel_values.items():
-        if key.startswith("__pregel_") or key == "__interrupt__":
-            continue
-        result[key] = _serialize_lc_object(value)
-    return result
 
 
 # ---------------------------------------------------------------------------
@@ -257,7 +208,7 @@ async def create_thread(body: ThreadCreateRequest, request: Request) -> ThreadRe
                 created_at=str(metadata.get("created_at", "")),
                 updated_at=str(metadata.get("updated_at", "")),
                 metadata={k: v for k, v in metadata.items() if k not in ("created_at", "updated_at")},
-                values=_serialize_channel_values(channel_values),
+                values=serialize_channel_values(channel_values),
             )
     except Exception:
         pass  # Not critical — proceed with creation
@@ -331,7 +282,7 @@ async def search_threads(body: ThreadSearchRequest, request: Request) -> list[Th
                 created_at=str(metadata.get("created_at", "")),
                 updated_at=str(metadata.get("updated_at", "")),
                 metadata={k: v for k, v in metadata.items() if k not in ("created_at", "updated_at")},
-                values=_serialize_channel_values(channel_values),
+                values=serialize_channel_values(channel_values),
             )
 
             if len(seen) >= body.limit + body.offset:
@@ -377,7 +328,7 @@ async def patch_thread(thread_id: str, body: ThreadPatchRequest, request: Reques
         created_at=str(metadata.get("created_at", "")),
         updated_at=str(metadata.get("updated_at", "")),
         metadata={k: v for k, v in metadata.items() if k not in ("created_at", "updated_at")},
-        values=_serialize_channel_values(channel_values),
+        values=serialize_channel_values(channel_values),
     )
 
 
@@ -405,7 +356,7 @@ async def get_thread(thread_id: str, request: Request) -> ThreadResponse:
         created_at=str(metadata.get("created_at", "")),
         updated_at=str(metadata.get("updated_at", "")),
         metadata={k: v for k, v in metadata.items() if k not in ("created_at", "updated_at")},
-        values=_serialize_channel_values(channel_values),
+        values=serialize_channel_values(channel_values),
     )
 
 
@@ -447,7 +398,7 @@ async def get_thread_state(thread_id: str, request: Request) -> ThreadStateRespo
     tasks = [{"id": getattr(t, "id", ""), "name": getattr(t, "name", "")} for t in tasks_raw]
 
     return ThreadStateResponse(
-        values=_serialize_channel_values(channel_values),
+        values=serialize_channel_values(channel_values),
         next=next_tasks,
         metadata=metadata,
         checkpoint={"id": checkpoint_id, "ts": str(metadata.get("created_at", ""))},
@@ -501,7 +452,7 @@ async def update_thread_state(thread_id: str, body: ThreadStateUpdateRequest, re
         new_checkpoint_id = new_config.get("configurable", {}).get("checkpoint_id")
 
     return ThreadStateResponse(
-        values=_serialize_channel_values(channel_values),
+        values=serialize_channel_values(channel_values),
         next=[],
         metadata=metadata,
         checkpoint_id=new_checkpoint_id,
@@ -542,7 +493,7 @@ async def get_thread_history(thread_id: str, body: ThreadHistoryRequest, request
                     checkpoint_id=checkpoint_id,
                     parent_checkpoint_id=parent_id,
                     metadata=metadata,
-                    values=_serialize_channel_values(channel_values),
+                    values=serialize_channel_values(channel_values),
                     created_at=str(metadata.get("created_at", "")),
                     next=next_tasks,
                 )

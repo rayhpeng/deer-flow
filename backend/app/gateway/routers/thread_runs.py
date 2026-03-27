@@ -22,11 +22,10 @@ from fastapi.responses import Response, StreamingResponse
 from langchain_core.messages import HumanMessage
 from pydantic import BaseModel, Field
 
-from deerflow.agents.runs import ConflictError, DisconnectMode, RunManager, RunRecord, RunStatus, UnsupportedStrategyError, run_agent
-from deerflow.agents.stream_bridge import END_SENTINEL, HEARTBEAT_SENTINEL, StreamBridge
+from deerflow.runtime import ConflictError, DisconnectMode, END_SENTINEL, HEARTBEAT_SENTINEL, RunManager, RunRecord, RunStatus, StreamBridge, UnsupportedStrategyError, run_agent
 
 from app.gateway.deps import get_checkpointer, get_run_manager, get_store, get_stream_bridge
-from app.gateway.routers.threads import _serialize_channel_values
+from deerflow.runtime import serialize_channel_values
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/threads", tags=["runs"])
@@ -313,7 +312,7 @@ async def wait_run(thread_id: str, body: RunCreateRequest, request: Request) -> 
         if checkpoint_tuple is not None:
             checkpoint = getattr(checkpoint_tuple, "checkpoint", {}) or {}
             channel_values = checkpoint.get("channel_values", {})
-            return _serialize_channel_values(channel_values)
+            return serialize_channel_values(channel_values)
     except Exception:
         logger.exception("Failed to fetch final state for run %s", record.run_id)
 
