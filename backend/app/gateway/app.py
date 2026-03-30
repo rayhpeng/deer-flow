@@ -48,35 +48,29 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     config = get_gateway_config()
     logger.info(f"Starting API Gateway on {config.host}:{config.port}")
 
-    # Initialize LangGraph runtime components (StreamBridge, RunManager, checkpointer)
+    # Initialize LangGraph runtime components (StreamBridge, RunManager, checkpointer, store)
     async with langgraph_runtime(app):
         logger.info("LangGraph runtime initialised")
+
+        # Start IM channel service if any channels are configured
+        try:
+            from app.channels.service import start_channel_service
+
+            channel_service = await start_channel_service()
+            logger.info("Channel service started: %s", channel_service.get_status())
+        except Exception:
+            logger.exception("No IM channels configured or channel service failed to start")
+
         yield
 
-    logger.info("LangGraph runtime initialised (stream_bridge + checkpointer + run_manager)")
+        # Stop channel service on shutdown
+        try:
+            from app.channels.service import stop_channel_service
 
-    # Start IM channel service if any channels are configured
-    try:
-        from app.channels.service import start_channel_service
+            await stop_channel_service()
+        except Exception:
+            logger.exception("Failed to stop channel service")
 
-        channel_service = await start_channel_service()
-        logger.info("Channel service started: %s", channel_service.get_status())
-    except Exception:
-        logger.exception("No IM channels configured or channel service failed to start")
-
-    yield
-
-    # Stop channel service on shutdown
-    try:
-        from app.channels.service import stop_channel_service
-
-        await stop_channel_service()
-    except Exception:
-        logger.exception("Failed to stop channel service")
-
-    # Cleanup LangGraph runtime
-    await bridge_cm.__aexit__(None, None, None)
-    await ckpt_cm.__aexit__(None, None, None)
     logger.info("Shutting down API Gateway")
 
 

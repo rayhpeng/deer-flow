@@ -1,9 +1,9 @@
 """Run status and disconnect mode enums."""
 
-from enum import Enum
+from enum import StrEnum
 
 
-class RunStatus(str, Enum):
+class RunStatus(StrEnum):
     """Lifecycle status of a single run."""
 
     pending = "pending"
@@ -14,7 +14,7 @@ class RunStatus(str, Enum):
     interrupted = "interrupted"
 
 
-class DisconnectMode(str, Enum):
+class DisconnectMode(StrEnum):
     """Behaviour when the SSE consumer disconnects."""
 
     cancel = "cancel"
