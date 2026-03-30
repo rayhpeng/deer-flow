@@ -24,7 +24,7 @@ from collections.abc import AsyncIterator
 from langgraph.store.base import BaseStore
 
 from deerflow.config.app_config import get_app_config
-from deerflow.runtime.store.provider import POSTGRES_CONN_REQUIRED, POSTGRES_STORE_INSTALL, SQLITE_STORE_INSTALL, _ensure_sqlite_parent_dir, _resolve_sqlite_conn_str
+from deerflow.runtime.store.provider import POSTGRES_CONN_REQUIRED, POSTGRES_STORE_INSTALL, SQLITE_STORE_INSTALL, ensure_sqlite_parent_dir, resolve_sqlite_conn_str
 
 logger = logging.getLogger(__name__)
 
@@ -53,8 +53,8 @@ async def _async_store(config) -> AsyncIterator[BaseStore]:
         except ImportError as exc:
             raise ImportError(SQLITE_STORE_INSTALL) from exc
 
-        conn_str = _resolve_sqlite_conn_str(config.connection_string or "store.db")
-        _ensure_sqlite_parent_dir(conn_str)
+        conn_str = resolve_sqlite_conn_str(config.connection_string or "store.db")
+        ensure_sqlite_parent_dir(conn_str)
 
         async with AsyncSqliteStore.from_conn_string(conn_str) as store:
             await store.setup()

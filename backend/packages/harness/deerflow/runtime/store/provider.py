@@ -22,13 +22,12 @@ from __future__ import annotations
 
 import contextlib
 import logging
-import pathlib
 from collections.abc import Iterator
 
 from langgraph.store.base import BaseStore
 
 from deerflow.config.app_config import get_app_config
-from deerflow.config.paths import resolve_path
+from deerflow.runtime.store._sqlite_utils import ensure_sqlite_parent_dir, resolve_sqlite_conn_str
 
 logger = logging.getLogger(__name__)
 
@@ -45,32 +44,6 @@ POSTGRES_STORE_INSTALL = (
     "Install it with: uv add langgraph-checkpoint-postgres psycopg[binary] psycopg-pool"
 )
 POSTGRES_CONN_REQUIRED = "checkpointer.connection_string is required for the postgres backend"
-
-# ---------------------------------------------------------------------------
-# Shared SQLite utilities (used by both store and checkpointer providers)
-# ---------------------------------------------------------------------------
-
-
-def _resolve_sqlite_conn_str(raw: str) -> str:
-    """Return a SQLite connection string ready for use with store/checkpointer backends.
-
-    SQLite special strings (``":memory:"`` and ``file:`` URIs) are returned
-    unchanged.  Plain filesystem paths — relative or absolute — are resolved
-    to an absolute string via :func:`resolve_path`.
-    """
-    if raw == ":memory:" or raw.startswith("file:"):
-        return raw
-    return str(resolve_path(raw))
-
-
-def _ensure_sqlite_parent_dir(conn_str: str) -> None:
-    """Create parent directory for a SQLite filesystem path.
-
-    No-op for in-memory databases (``":memory:"``) and ``file:`` URIs.
-    """
-    if conn_str != ":memory:" and not conn_str.startswith("file:"):
-        pathlib.Path(conn_str).parent.mkdir(parents=True, exist_ok=True)
-
 
 # ---------------------------------------------------------------------------
 # Sync factory
@@ -98,8 +71,8 @@ def _sync_store_cm(config) -> Iterator[BaseStore]:
         except ImportError as exc:
             raise ImportError(SQLITE_STORE_INSTALL) from exc
 
-        conn_str = _resolve_sqlite_conn_str(config.connection_string or "store.db")
-        _ensure_sqlite_parent_dir(conn_str)
+        conn_str = resolve_sqlite_conn_str(config.connection_string or "store.db")
+        ensure_sqlite_parent_dir(conn_str)
 
         with SqliteStore.from_conn_string(conn_str) as store:
             store.setup()
