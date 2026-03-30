@@ -125,7 +125,7 @@ class AppConfig(BaseModel):
         # Load stream bridge config if present
         if "stream_bridge" in config_data:
             load_stream_bridge_config_from_dict(config_data["stream_bridge"])
-        
+
         # Always refresh ACP agent config so removed entries do not linger across reloads.
         load_acp_config_from_dict(config_data.get("acp_agents", {}))
 

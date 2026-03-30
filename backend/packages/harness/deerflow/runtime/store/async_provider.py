@@ -105,11 +105,7 @@ async def make_store() -> AsyncIterator[BaseStore]:
     if config.checkpointer is None:
         from langgraph.store.memory import InMemoryStore
 
-        logger.warning(
-            "No 'checkpointer' section in config.yaml — using InMemoryStore for the store. "
-            "Thread list will be lost on server restart. "
-            "Configure a sqlite or postgres backend for persistence."
-        )
+        logger.warning("No 'checkpointer' section in config.yaml — using InMemoryStore for the store. Thread list will be lost on server restart. Configure a sqlite or postgres backend for persistence.")
         yield InMemoryStore()
         return
 

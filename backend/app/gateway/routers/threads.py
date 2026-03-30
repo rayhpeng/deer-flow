@@ -145,7 +145,6 @@ def _delete_thread_data(thread_id: str, paths: Paths | None = None) -> ThreadDel
     return ThreadDeleteResponse(success=True, message=f"Deleted local thread data for {thread_id}")
 
 
-
 async def _store_get(store, thread_id: str) -> dict | None:
     """Fetch a thread record from the Store; returns ``None`` if absent."""
     item = await store.aget(THREADS_NS, thread_id)
@@ -170,14 +169,17 @@ async def _store_upsert(store, thread_id: str, *, metadata: dict | None = None, 
     now = time.time()
     existing = await _store_get(store, thread_id)
     if existing is None:
-        await _store_put(store, {
-            "thread_id": thread_id,
-            "status": "idle",
-            "created_at": now,
-            "updated_at": now,
-            "metadata": metadata or {},
-            "values": values or {},
-        })
+        await _store_put(
+            store,
+            {
+                "thread_id": thread_id,
+                "status": "idle",
+                "created_at": now,
+                "updated_at": now,
+                "metadata": metadata or {},
+                "values": values or {},
+            },
+        )
     else:
         val = dict(existing)
         val["updated_at"] = now
@@ -270,13 +272,16 @@ async def create_thread(body: ThreadCreateRequest, request: Request) -> ThreadRe
     # Write thread record to Store
     if store is not None:
         try:
-            await _store_put(store, {
-                "thread_id": thread_id,
-                "status": "idle",
-                "created_at": now,
-                "updated_at": now,
-                "metadata": body.metadata,
-            })
+            await _store_put(
+                store,
+                {
+                    "thread_id": thread_id,
+                    "status": "idle",
+                    "created_at": now,
+                    "updated_at": now,
+                    "metadata": body.metadata,
+                },
+            )
         except Exception:
             logger.exception("Failed to write thread %s to store", thread_id)
             raise HTTPException(status_code=500, detail="Failed to create thread")

@@ -30,6 +30,7 @@ logger = logging.getLogger(__name__)
 # Valid stream_mode values for LangGraph's graph.astream()
 _VALID_LG_MODES = {"values", "updates", "checkpoints", "tasks", "debug", "messages", "custom"}
 
+
 async def run_agent(
     bridge: StreamBridge,
     run_manager: RunManager,
@@ -250,5 +251,3 @@ def _unpack_stream_item(
 
     # Fallback: single-element output from first mode
     return lg_modes[0] if lg_modes else None, item
-
-

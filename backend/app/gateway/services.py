@@ -258,9 +258,7 @@ async def start_run(
     # the checkpointer into the Store record so that /threads/search returns the
     # correct title instead of an empty values dict.
     if store is not None:
-        asyncio.create_task(
-            _sync_thread_title_after_run(task, thread_id, checkpointer, store)
-        )
+        asyncio.create_task(_sync_thread_title_after_run(task, thread_id, checkpointer, store))
 
     return record
 
