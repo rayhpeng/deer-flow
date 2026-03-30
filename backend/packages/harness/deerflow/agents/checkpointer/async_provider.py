@@ -27,6 +27,7 @@ from deerflow.agents.checkpointer.provider import (
     POSTGRES_CONN_REQUIRED,
     POSTGRES_INSTALL,
     SQLITE_INSTALL,
+    _ensure_sqlite_parent_dir,
     _resolve_sqlite_conn_str,
 )
 from deerflow.config.app_config import get_app_config
@@ -53,12 +54,8 @@ async def _async_checkpointer(config) -> AsyncIterator[Checkpointer]:
         except ImportError as exc:
             raise ImportError(SQLITE_INSTALL) from exc
 
-        import pathlib
-
         conn_str = _resolve_sqlite_conn_str(config.connection_string or "store.db")
-        # Only create parent directories for real filesystem paths
-        if conn_str != ":memory:" and not conn_str.startswith("file:"):
-            pathlib.Path(conn_str).parent.mkdir(parents=True, exist_ok=True)
+        _ensure_sqlite_parent_dir(conn_str)
         async with AsyncSqliteSaver.from_conn_string(conn_str) as saver:
             await saver.setup()
             yield saver

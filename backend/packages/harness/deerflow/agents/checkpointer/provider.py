@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import contextlib
 import logging
+import pathlib
 from collections.abc import Iterator
 
 from langgraph.types import Checkpointer
@@ -54,6 +55,16 @@ def _resolve_sqlite_conn_str(raw: str) -> str:
     if raw == ":memory:" or raw.startswith("file:"):
         return raw
     return str(resolve_path(raw))
+
+
+def _ensure_sqlite_parent_dir(conn_str: str) -> None:
+    """Create parent directory for a SQLite filesystem path.
+
+    No-op for in-memory databases (``":memory:"``) and ``file:`` URIs.
+    Shared by checkpointer and store providers to avoid duplicating this logic.
+    """
+    if conn_str != ":memory:" and not conn_str.startswith("file:"):
+        pathlib.Path(conn_str).parent.mkdir(parents=True, exist_ok=True)
 
 
 @contextlib.contextmanager

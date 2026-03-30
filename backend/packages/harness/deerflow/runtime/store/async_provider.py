@@ -19,29 +19,15 @@ from __future__ import annotations
 
 import contextlib
 import logging
-import pathlib
 from collections.abc import AsyncIterator
 
 from langgraph.store.base import BaseStore
 
-from deerflow.agents.checkpointer.provider import _resolve_sqlite_conn_str
+from deerflow.agents.checkpointer.provider import _ensure_sqlite_parent_dir, _resolve_sqlite_conn_str
 from deerflow.config.app_config import get_app_config
+from deerflow.runtime.store.provider import POSTGRES_CONN_REQUIRED, POSTGRES_STORE_INSTALL, SQLITE_STORE_INSTALL
 
 logger = logging.getLogger(__name__)
-
-# ---------------------------------------------------------------------------
-# Error message constants
-# ---------------------------------------------------------------------------
-
-SQLITE_STORE_INSTALL = (
-    "langgraph-checkpoint-sqlite is required for the SQLite store. "
-    "Install it with: uv add langgraph-checkpoint-sqlite"
-)
-POSTGRES_STORE_INSTALL = (
-    "langgraph-checkpoint-postgres is required for the PostgreSQL store. "
-    "Install it with: uv add langgraph-checkpoint-postgres psycopg[binary] psycopg-pool"
-)
-POSTGRES_CONN_REQUIRED = "checkpointer.connection_string is required for the postgres backend"
 
 # ---------------------------------------------------------------------------
 # Internal backend factory
@@ -69,9 +55,7 @@ async def _async_store(config) -> AsyncIterator[BaseStore]:
             raise ImportError(SQLITE_STORE_INSTALL) from exc
 
         conn_str = _resolve_sqlite_conn_str(config.connection_string or "store.db")
-        # Ensure the parent directory exists for real filesystem paths
-        if conn_str != ":memory:" and not conn_str.startswith("file:"):
-            pathlib.Path(conn_str).parent.mkdir(parents=True, exist_ok=True)
+        _ensure_sqlite_parent_dir(conn_str)
 
         async with AsyncSqliteStore.from_conn_string(conn_str) as store:
             await store.setup()
