@@ -1,7 +1,8 @@
 """Stateless runs endpoints -- stream and wait without a pre-existing thread.
 
-These endpoints auto-create a temporary thread, execute the run, and
-optionally delete the thread on completion.
+These endpoints auto-create a temporary thread when no ``thread_id`` is
+supplied in the request body.  When a ``thread_id`` **is** provided, it
+is reused so that conversation history is preserved across calls.
 """
 
 from __future__ import annotations
@@ -22,10 +23,23 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/runs", tags=["runs"])
 
 
+def _resolve_thread_id(body: RunCreateRequest) -> str:
+    """Return the thread_id from the request body, or generate a new one."""
+    thread_id = (body.config or {}).get("configurable", {}).get("thread_id")
+    if thread_id:
+        return str(thread_id)
+    return str(uuid.uuid4())
+
+
 @router.post("/stream")
 async def stateless_stream(body: RunCreateRequest, request: Request) -> StreamingResponse:
-    """Create a run on a temporary thread and stream events via SSE."""
-    thread_id = str(uuid.uuid4())
+    """Create a run and stream events via SSE.
+
+    If ``config.configurable.thread_id`` is provided, the run is created
+    on the given thread so that conversation history is preserved.
+    Otherwise a new temporary thread is created.
+    """
+    thread_id = _resolve_thread_id(body)
     bridge = get_stream_bridge(request)
     run_mgr = get_run_manager(request)
     record = await start_run(body, thread_id, request)
@@ -43,8 +57,13 @@ async def stateless_stream(body: RunCreateRequest, request: Request) -> Streamin
 
 @router.post("/wait", response_model=dict)
 async def stateless_wait(body: RunCreateRequest, request: Request) -> dict:
-    """Create a run on a temporary thread and block until completion."""
-    thread_id = str(uuid.uuid4())
+    """Create a run and block until completion.
+
+    If ``config.configurable.thread_id`` is provided, the run is created
+    on the given thread so that conversation history is preserved.
+    Otherwise a new temporary thread is created.
+    """
+    thread_id = _resolve_thread_id(body)
     record = await start_run(body, thread_id, request)
 
     if record.task is not None:

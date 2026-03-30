@@ -223,7 +223,43 @@ async def join_run(thread_id: str, run_id: str, request: Request) -> StreamingRe
     )
 
 
-@router.get("/{thread_id}/runs/{run_id}/stream")
-async def stream_existing_run(thread_id: str, run_id: str, request: Request) -> StreamingResponse:
-    """SSE alias for join."""
-    return await join_run(thread_id, run_id, request)
+@router.api_route("/{thread_id}/runs/{run_id}/stream", methods=["GET", "POST"], response_model=None)
+async def stream_existing_run(
+    thread_id: str,
+    run_id: str,
+    request: Request,
+    action: Literal["interrupt", "rollback"] | None = Query(default=None, description="Cancel action"),
+    wait: int = Query(default=0, description="Block until cancelled (1) or return immediately (0)"),
+):
+    """Join an existing run's SSE stream (GET), or cancel-then-stream (POST).
+
+    The LangGraph SDK's ``joinStream`` and ``useStream`` stop button both use
+    ``POST`` to this endpoint.  When ``action=interrupt`` or ``action=rollback``
+    is present the run is cancelled first; the response then streams any
+    remaining buffered events so the client observes a clean shutdown.
+    """
+    run_mgr = get_run_manager(request)
+    record = run_mgr.get(run_id)
+    if record is None or record.thread_id != thread_id:
+        raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
+
+    # Cancel if an action was requested (stop-button / interrupt flow)
+    if action is not None:
+        cancelled = await run_mgr.cancel(run_id, action=action)
+        if cancelled and wait and record.task is not None:
+            try:
+                await record.task
+            except (asyncio.CancelledError, Exception):
+                pass
+            return Response(status_code=204)
+
+    bridge = get_stream_bridge(request)
+    return StreamingResponse(
+        sse_consumer(bridge, record, request, run_mgr),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
