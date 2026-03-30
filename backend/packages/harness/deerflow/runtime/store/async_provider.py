@@ -23,9 +23,8 @@ from collections.abc import AsyncIterator
 
 from langgraph.store.base import BaseStore
 
-from deerflow.agents.checkpointer.provider import _ensure_sqlite_parent_dir, _resolve_sqlite_conn_str
 from deerflow.config.app_config import get_app_config
-from deerflow.runtime.store.provider import POSTGRES_CONN_REQUIRED, POSTGRES_STORE_INSTALL, SQLITE_STORE_INSTALL
+from deerflow.runtime.store.provider import POSTGRES_CONN_REQUIRED, POSTGRES_STORE_INSTALL, SQLITE_STORE_INSTALL, _ensure_sqlite_parent_dir, _resolve_sqlite_conn_str
 
 logger = logging.getLogger(__name__)
 

@@ -21,14 +21,13 @@ from __future__ import annotations
 
 import contextlib
 import logging
-import pathlib
 from collections.abc import Iterator
 
 from langgraph.types import Checkpointer
 
 from deerflow.config.app_config import get_app_config
 from deerflow.config.checkpointer_config import CheckpointerConfig
-from deerflow.config.paths import resolve_path
+from deerflow.runtime.store.provider import _resolve_sqlite_conn_str
 
 logger = logging.getLogger(__name__)
 
@@ -43,28 +42,6 @@ POSTGRES_CONN_REQUIRED = "checkpointer.connection_string is required for the pos
 # ---------------------------------------------------------------------------
 # Sync factory
 # ---------------------------------------------------------------------------
-
-
-def _resolve_sqlite_conn_str(raw: str) -> str:
-    """Return a SQLite connection string ready for use with ``SqliteSaver``.
-
-    SQLite special strings (``":memory:"`` and ``file:`` URIs) are returned
-    unchanged.  Plain filesystem paths — relative or absolute — are resolved
-    to an absolute string via :func:`resolve_path`.
-    """
-    if raw == ":memory:" or raw.startswith("file:"):
-        return raw
-    return str(resolve_path(raw))
-
-
-def _ensure_sqlite_parent_dir(conn_str: str) -> None:
-    """Create parent directory for a SQLite filesystem path.
-
-    No-op for in-memory databases (``":memory:"``) and ``file:`` URIs.
-    Shared by checkpointer and store providers to avoid duplicating this logic.
-    """
-    if conn_str != ":memory:" and not conn_str.startswith("file:"):
-        pathlib.Path(conn_str).parent.mkdir(parents=True, exist_ok=True)
 
 
 @contextlib.contextmanager
