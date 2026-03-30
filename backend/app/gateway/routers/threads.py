@@ -234,9 +234,8 @@ async def delete_thread_data(thread_id: str, request: Request) -> ThreadDeleteRe
     checkpointer = getattr(request.app.state, "checkpointer", None)
     if checkpointer is not None:
         try:
-            config = {"configurable": {"thread_id": thread_id, "checkpoint_ns": ""}}
-            if hasattr(checkpointer, "adelete"):
-                await checkpointer.adelete(config)
+            if hasattr(checkpointer, "adelete_thread"):
+                await checkpointer.adelete_thread(thread_id)
         except Exception:
             logger.debug("Could not delete checkpoints for thread %s (not critical)", thread_id)
 
